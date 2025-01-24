@@ -4,15 +4,15 @@ use nas_rs::{Request, PORT};
 use rkyv::{to_bytes, rancor::Error};
 
 fn main() {
+    // file data
+    let file_data = "Hello World!\r\n".to_string().into_bytes();
     // package data
     let file = Request::Write {
-        path: "Hello World!".to_string(),
-        len: 16,
+        path: "./files/a.txt".to_string(),
+        len: file_data.len() as u64,
     };
     // serialize
     let bytes = to_bytes::<Error>(&file).expect("serialize failed");
-    // file data
-    let file_data: Vec<_> = (0..16).collect();
 
     // connect
     let mut stream = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, PORT)).expect("Couldn't connect");
