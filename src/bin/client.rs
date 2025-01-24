@@ -6,8 +6,16 @@ use rkyv::{to_bytes, rancor::Error};
 fn main() {
     // package data
     let file = Request {
-        str: "Hello World!".to_string(),
+        str: "remove rah.txt".to_string(),
     };
+    write(file);
+    let file = Request {
+        str: "remove!".to_string()
+    };
+    write(file);
+}
+
+fn write(file: Request) {
     // serialize
     let bytes = to_bytes::<Error>(&file).expect("serialize failed");
 
