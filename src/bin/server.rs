@@ -1,33 +1,21 @@
-use std::{fs::File, io::{BufReader, BufWriter, Read, Write}, net::{Ipv4Addr, SocketAddrV4, TcpListener}};
+use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}};
 
-use nas_rs::{sanitize_path, ArchivedRequest, Request, PORT};
-use rkyv::{access, deserialize, rancor::Error};
+use nas_rs::{sanitize_path, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
+use rkyv::rancor::Error;
 
 fn main() {
     let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, PORT)).expect("Couldn't bind port");
     for msg in listener.incoming() {
-        let mut reader = BufReader::new(msg.as_ref().unwrap());
-        let mut writer = BufWriter::new(msg.as_ref().unwrap());
+        let mut tcp = msg.unwrap();
+        let mut stream = StructStream::new(&mut tcp);
 
-        // read our buffer size
-        let mut buf = [0; 4];
-        reader.read_exact(&mut buf).unwrap();
+        // read struct
+        let request = stream.receive_struct::<Request, ArchivedRequest, Error>().expect("couldn't receive struct");
 
-        // get serialized struct length
-        // unwrap can't fail
-        let len = u32::from_le_bytes(buf);
-
-        // read our buffer
-        let mut buf = vec![0; len as usize];
-        reader.read_exact(&mut buf).unwrap();
-
-        // deserialize
-        let file: Request = deserialize::<Request, Error>(access::<ArchivedRequest, Error>(&buf).expect("corrupted file")).expect("corrupted file");
-        println!("{file:?}");
-        match file {
+        println!("{request:?}");
+        match request {
             Request::Write { path, len } => {
-                let mut file_data = vec![0; len as usize];
-                reader.read_exact(&mut file_data).expect("buffer not full (buffer sent is not at least len bytes)");
+                let file_data = stream.receive_buffer::<Error>(len).expect("couldn't receive buffer");
                 let path = sanitize_path(&path).expect("not allowed >:(");
                 let mut dir = path.clone();
                 dir.pop();
@@ -45,10 +33,25 @@ fn main() {
             Request::Read { path } => {
                 let path = sanitize_path(&path).expect("not allowed >:(");
                 let buf = std::fs::read(path).expect("can't read file");
-                writer.write_all(&(buf.len() as u64).to_le_bytes()).expect("can't send");
-                writer.write_all(&buf).expect("can't send");
+                stream.write_struct::<Error>(&FileRead { len: buf.len() as u64 }).expect("couldn't send data");
+                stream.write_buffer::<Error>(&buf).expect("couldn't send data");
             },
-            Request::EnumDir { path } => todo!(),
+            Request::EnumDir { path } => {
+                let path = sanitize_path(&path).expect("not allowed >:(");
+                if !path.is_dir() {
+                    panic!("not a dir");
+                }
+                let contents: Vec<_> = path.read_dir()
+                        .expect("couldn't read dir")
+                        .map(|x| x.expect("invalid dir entry"))
+                        .map(|x| (x.file_name(), x.file_type().expect("invalid file type")))
+                        .filter(|(_, t)| !t.is_symlink())
+                        .map(|(x, t)| (x.into_string().expect("non utf-8 filename"), t.is_dir()))
+                        .collect();
+                stream.write_struct::<Error>(&DirEnum {
+                    files: contents,
+                }).expect("couldn't send dir enum");
+            },
         }
     }
 }
