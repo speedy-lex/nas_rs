@@ -22,6 +22,16 @@ fn main() {
 
         // deserialize
         let file: Request = deserialize::<Request, Error>(access::<ArchivedRequest, Error>(&buf).expect("corrupted file")).expect("corrupted file");
-        println!("{file:?}")
+        println!("{file:?}");
+        match file {
+            Request::Write { path, len } => {
+                let mut file_data = vec![0; len as usize];
+                msg.read_exact(&mut file_data).expect("buffer not full (buffer sent is not at least len bytes)");
+                println!("{file_data:?}")
+            },
+            Request::Delete { path } => {
+                
+            },
+        }
     }
 }
