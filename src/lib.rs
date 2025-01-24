@@ -7,7 +7,6 @@ pub enum Request {
     Write {
         path: String,
         len: u64,
-
     },
     Delete {
         path: String,
