@@ -1,19 +1,57 @@
-use std::{env, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpStream}, str::FromStr};
+use std::{fs, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::PathBuf};
 
+use clap::{arg, value_parser};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
 
 fn main() {
+    let args= clap::Command::new("nas_rs")
+        .arg(
+            arg!([file_path])
+            .required(true)
+            .value_parser(value_parser!(String))
+        ).arg(
+            arg!(--write [client_file_path])
+            .required(false)
+            .value_parser(value_parser!(PathBuf))
+        ).arg(
+            arg!(--delete)
+            .required(false)
+        ).arg(
+            arg!(--ip <ip>)
+            .required(false)
+            .value_parser(value_parser!(Ipv4Addr))
+        ).arg(
+            arg!(--port <port>)
+            .required(false)
+            .value_parser(value_parser!(u16))
+        ).get_matches();
+    
+    let path = args.get_one::<String>("file_path").unwrap().clone();
+
     // file data
-    let file_data = "Hello World!\r\n".as_bytes().to_vec();
+    let file_data = args.get_one("write")
+        .map(|x: &PathBuf| fs::read(x)
+        .expect("couldn't read input file"))
+        .unwrap_or_default();
     // package data
-    let request = Request::EnumDir {
-        path: "a".to_string(),
-        // len: file_data.len() as u64,
-    };
+    let request = args.get_one("delete")
+        .filter(|x| **x)
+        .map(|_: &bool| {
+            Request::Delete { path: path.clone() }
+        })
+        .unwrap_or_else(|| {
+            args.get_one("write")
+            .map(|_: &PathBuf| {
+                Request::Write { path: path.clone(), len: file_data.len() as u64 }
+            })
+            .unwrap_or(
+                Request::Read { path }
+            )
+        });
 
     // connect and send data
-    let mut tcp = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::from_str(&env::args().nth(1).unwrap_or_else(|| "127.0.0.1".to_string())).unwrap(), PORT)).expect("Couldn't connect");
+    let mut tcp = TcpStream::connect(SocketAddrV4::new(*args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST), *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't connect");
     let mut stream = StructStream::new(&mut tcp);
     stream.write_struct::<Error>(&request).expect("couldn't send request");
     if let Request::Write { .. } = request {
@@ -25,6 +63,9 @@ fn main() {
         let file_info = stream.receive_struct::<FileRead, ArchivedFileRead, Error>().expect("couldn't recieve file");
         let file = stream.receive_buffer::<Error>(file_info.len).expect("couldn't receive file");
         println!("{file:?}");
+        println!("-- START FILE --");
+        println!("{}", String::from_utf8_lossy(&file));
+        println!("-- EOF --");
     } else if let Request::EnumDir { .. } = request {
         let files = stream.receive_struct::<DirEnum, ArchivedDirEnum, Error>().expect("couldn't receive dir enum");
         println!("{files:?}");
