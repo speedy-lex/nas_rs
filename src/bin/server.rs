@@ -1,10 +1,10 @@
-use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}};
+use std::{env, fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, str::FromStr};
 
 use nas_rs::{sanitize_path, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
 
 fn main() {
-    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, PORT)).expect("Couldn't bind port");
+    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::from_str(&env::args().nth(1).unwrap_or_else(|| "127.0.0.1".to_string())).unwrap(), PORT)).expect("Couldn't bind port");
     for msg in listener.incoming() {
         let mut tcp = msg.unwrap();
         let mut stream = StructStream::new(&mut tcp);
