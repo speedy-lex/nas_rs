@@ -1,4 +1,4 @@
-use std::{io::Write, net::{Ipv4Addr, SocketAddrV4, TcpStream}};
+use std::{env, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpStream}, str::FromStr};
 
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
@@ -13,7 +13,7 @@ fn main() {
     };
 
     // connect and send data
-    let mut tcp = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, PORT)).expect("Couldn't connect");
+    let mut tcp = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::from_str(&env::args().nth(1).unwrap_or_else(|| "127.0.0.1".to_string())).unwrap(), PORT)).expect("Couldn't connect");
     let mut stream = StructStream::new(&mut tcp);
     stream.write_struct::<Error>(&request).expect("couldn't send request");
     if let Request::Write { .. } = request {
