@@ -34,6 +34,9 @@ pub struct DirEnum {
 pub const PATH: &str = "./files/";
 /// doesn't allow symlinks
 pub fn sanitize_path(path: &str) -> Option<PathBuf> {
+    if path == "." {
+        return Some(PathBuf::from(PATH));
+    }
     if !path.is_empty() && (path.starts_with('/') || path.starts_with('\\')) {
         return None;
     }
