@@ -1,4 +1,4 @@
-use std::{fs, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::PathBuf};
+use std::{io::{Read, Write}, net::{Ipv4Addr, SocketAddrV4, TcpStream}};
 
 use clap::{arg, value_parser};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream, PORT};
@@ -11,9 +11,8 @@ fn main() {
             .required(true)
             .value_parser(value_parser!(String))
         ).arg(
-            arg!(--write [client_file_path])
+            arg!(--write)
             .required(false)
-            .value_parser(value_parser!(PathBuf))
         ).arg(
             arg!(--delete)
             .required(false)
@@ -31,9 +30,12 @@ fn main() {
 
     // file data
     let file_data = args.get_one("write")
-        .map(|x: &PathBuf| fs::read(x)
-        .expect("couldn't read input file"))
-        .unwrap_or_default();
+        .filter(|x| **x)
+        .map(|_: &bool| {
+            let mut vec = vec![];
+            std::io::stdin().read_to_end(&mut vec).expect("can't read");
+            vec
+        }).unwrap_or_default();
     // package data
     let request = args.get_one("delete")
         .filter(|x| **x)
@@ -42,7 +44,8 @@ fn main() {
         })
         .unwrap_or_else(|| {
             args.get_one("write")
-            .map(|_: &PathBuf| {
+            .filter(|x| **x)
+            .map(|_: &bool| {
                 Request::Write { path: path.clone(), len: file_data.len() as u64 }
             })
             .unwrap_or(
