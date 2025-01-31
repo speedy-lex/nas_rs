@@ -1,10 +1,22 @@
-use std::{env, fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, str::FromStr, thread};
+use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, thread};
 
+use clap::{arg, value_parser};
 use nas_rs::{sanitize_path, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
 
 fn main() {
-    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::from_str(&env::args().nth(1).unwrap_or_else(|| "127.0.0.1".to_string())).unwrap(), PORT)).expect("Couldn't bind port");
+    let args= clap::Command::new("nas_rs")
+        .arg(
+            arg!(--ip <ip>)
+            .required(false)
+            .value_parser(value_parser!(Ipv4Addr))
+        ).arg(
+            arg!(--port <port>)
+            .required(false)
+            .value_parser(value_parser!(u16))
+        ).get_matches();
+
+    let listener = TcpListener::bind(SocketAddrV4::new(*args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST), *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't bind port");
     let mut threads = vec![];
     for msg in listener.incoming() {
         let thread = thread::spawn(move || handle_connection(msg));
