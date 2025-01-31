@@ -45,10 +45,11 @@ fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>) {
         Request::Write { path, len } => {
             let file_data = stream.receive_buffer::<Error>(len).expect("couldn't receive buffer");
             let path = sanitize_path(&path).expect("not allowed >:(");
-            let mut dir = path.clone();
-            dir.pop();
-            std::fs::create_dir_all(dir).expect("can't create dir");
             File::create(&path).expect("can't create file").write_all(&file_data).expect("can't write");
+        },
+        Request::MkDir { path } => {
+            let path = sanitize_path(&path).expect("not allowed >:(");
+            std::fs::create_dir(path).unwrap();
         },
         Request::Delete { path } => {
             let path = sanitize_path(&path).expect("not allowed >:(");
