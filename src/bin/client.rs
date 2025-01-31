@@ -17,6 +17,9 @@ fn main() {
             arg!(--delete)
             .required(false)
         ).arg(
+            arg!(--enumerate)
+            .required(false)
+        ).arg(
             arg!(--ip <ip>)
             .required(false)
             .value_parser(value_parser!(Ipv4Addr))
@@ -47,10 +50,13 @@ fn main() {
             .filter(|x| **x)
             .map(|_: &bool| {
                 Request::Write { path: path.clone(), len: file_data.len() as u64 }
+            }).unwrap_or_else(|| {
+                args.get_one("enumerate").filter(|x| **x)
+                .map(|_: &bool| {
+                    Request::EnumDir { path: path.clone() }
+                })
+                .unwrap_or(Request::Read { path })
             })
-            .unwrap_or(
-                Request::Read { path }
-            )
         });
 
     // connect and send data
