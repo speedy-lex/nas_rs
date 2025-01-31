@@ -14,6 +14,9 @@ fn main() {
             arg!(--write)
             .required(false)
         ).arg(
+            arg!(--mkdir)
+            .required(false)
+        ).arg(
             arg!(--delete)
             .required(false)
         ).arg(
@@ -51,11 +54,17 @@ fn main() {
             .map(|_: &bool| {
                 Request::Write { path: path.clone(), len: file_data.len() as u64 }
             }).unwrap_or_else(|| {
-                args.get_one("enumerate").filter(|x| **x)
+                args.get_one("mkdir")
+                .filter(|x| **x)
                 .map(|_: &bool| {
-                    Request::EnumDir { path: path.clone() }
+                    Request::MkDir { path: path.clone() }
+                }).unwrap_or_else(|| {
+                    args.get_one("enumerate").filter(|x| **x)
+                    .map(|_: &bool| {
+                        Request::EnumDir { path: path.clone() }
+                    })
+                    .unwrap_or(Request::Read { path })
                 })
-                .unwrap_or(Request::Read { path })
             })
         });
 

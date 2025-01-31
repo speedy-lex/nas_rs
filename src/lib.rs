@@ -10,6 +10,9 @@ pub enum Request {
         path: String,
         len: u64,
     },
+    MkDir {
+        path: String,
+    },
     Read {
         path: String,
     },
