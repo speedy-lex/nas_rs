@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, thread};
 
 use clap::{arg, value_parser};
-use nas_rs::{sanitize_path, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
+use nas_rs::{sanitize_path, sanitize_path_enum, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
 
 fn main() {
@@ -66,7 +66,7 @@ fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>) {
             stream.write_buffer::<Error>(&buf).expect("couldn't send data");
         },
         Request::EnumDir { path } => {
-            let path = sanitize_path(&path).expect("not allowed >:(");
+            let path = sanitize_path_enum(&path).expect("not allowed >:(");
             if !path.is_dir() {
                 panic!("not a dir");
             }
