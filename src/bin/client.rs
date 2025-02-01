@@ -80,10 +80,7 @@ fn main() {
     if let Request::Read { .. } = request {
         let file_info = stream.receive_struct::<FileRead, ArchivedFileRead, Error>().expect("couldn't recieve file");
         let file = stream.receive_buffer::<Error>(file_info.len).expect("couldn't receive file");
-        println!("{file:?}");
-        println!("-- START FILE --");
-        println!("{}", String::from_utf8_lossy(&file));
-        println!("-- EOF --");
+        std::io::stdout().write_all(&file).unwrap();
     } else if let Request::EnumDir { .. } = request {
         let files = stream.receive_struct::<DirEnum, ArchivedDirEnum, Error>().expect("couldn't receive dir enum");
         println!("{files:?}");

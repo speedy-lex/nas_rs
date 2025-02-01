@@ -37,9 +37,6 @@ pub struct DirEnum {
 pub const PATH: &str = "./files/";
 /// doesn't allow symlinks
 pub fn sanitize_path(path: &str) -> Option<PathBuf> {
-    if path == "." {
-        return Some(PathBuf::from(PATH));
-    }
     if !path.is_empty() && (path.starts_with('/') || path.starts_with('\\')) {
         return None;
     }
@@ -52,6 +49,12 @@ pub fn sanitize_path(path: &str) -> Option<PathBuf> {
         return None;
     }
     Some(result)
+}
+pub fn sanitize_path_enum(path: &str) -> Option<PathBuf> {
+    if path == "." {
+        return Some(PathBuf::from(PATH));
+    }
+    sanitize_path(path)
 }
 
 pub struct StructStream<'a> {
