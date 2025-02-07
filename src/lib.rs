@@ -1,6 +1,4 @@
-pub mod crypto;
-
-use std::{io::{Read, Write}, net::TcpStream, path::{Path, PathBuf}};
+use std::{io::{Read, Write}, path::{Path, PathBuf}};
 
 use rkyv::{access, api::high::{HighDeserializer, HighSerializer}, deserialize, rancor, ser::allocator::ArenaHandle, to_bytes, util::AlignedVec, Archive, Deserialize, Portable, Serialize};
 
@@ -59,11 +57,11 @@ pub fn sanitize_path_enum(path: &str) -> Option<PathBuf> {
     sanitize_path(path)
 }
 
-pub struct StructStream<'a> {
-    pub inner: &'a mut TcpStream
+pub struct StructStream<'a, S: Read + Write> {
+    pub inner: &'a mut S
 }
-impl<'a> StructStream<'a> {
-    pub fn new(stream: &'a mut TcpStream) -> Self {
+impl<'a, S: Read + Write> StructStream<'a, S> {
+    pub fn new(stream: &'a mut S) -> Self {
         Self { inner: stream }
     }
     pub fn write_u64<E: rancor::Source>(&mut self, x: u64) -> Result<(), E> {
