@@ -2,6 +2,7 @@ use std::{io::{Read, Write}, net::{Ipv4Addr, SocketAddrV4, TcpStream}};
 
 use clap::{arg, value_parser};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream, PORT};
+use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use rkyv::rancor::Error;
 
 fn main() {
@@ -69,8 +70,14 @@ fn main() {
         });
 
     // connect and send data
-    let mut tcp = TcpStream::connect(SocketAddrV4::new(*args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST), *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't connect");
-    let mut stream = StructStream::new(&mut tcp);
+    let ip = *args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST);
+    let tcp = TcpStream::connect(SocketAddrV4::new(ip, *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't connect");
+    let mut ssl = SslConnector::builder(SslMethod::tls_client()).unwrap();
+    ssl.set_verify(SslVerifyMode::PEER);
+    ssl.set_ca_file("CA.cert").unwrap();
+    let ssl = ssl.build();
+    let mut stream = ssl.connect(&ip.to_string(), tcp).unwrap();
+    let mut stream = StructStream::new(&mut stream);
     stream.write_struct::<Error>(&request).expect("couldn't send request");
     if let Request::Write { .. } = request {
         stream.write_buffer::<Error>(&file_data).expect("couldn't send file");

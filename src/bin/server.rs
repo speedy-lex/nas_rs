@@ -2,9 +2,11 @@ use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, threa
 
 use clap::{arg, value_parser};
 use nas_rs::{sanitize_path, sanitize_path_enum, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslVerifyMode};
 use rkyv::rancor::Error;
 
 fn main() {
+    openssl::init();
     let args= clap::Command::new("nas_rs")
         .arg(
             arg!(--ip <ip>)
@@ -34,8 +36,14 @@ fn main() {
 }
 
 fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>) {
-    let mut tcp = msg.unwrap();
-    let mut stream = StructStream::new(&mut tcp);
+    let tcp = msg.unwrap();
+    let mut ssl = SslAcceptor::mozilla_modern_v5(SslMethod::tls_server()).unwrap();
+    ssl.set_ca_file("CA.cert").unwrap();
+    ssl.set_certificate_file("SERVER.cert", SslFiletype::PEM).unwrap();
+    ssl.set_private_key_file("SERVER.key", SslFiletype::PEM).unwrap();
+    ssl.set_verify(SslVerifyMode::PEER);
+    let mut ssl = ssl.build().accept(tcp).unwrap();
+    let mut stream = StructStream::new(&mut ssl);
 
     // read struct
     let request = stream.receive_struct::<Request, ArchivedRequest, Error>().expect("couldn't receive struct");
