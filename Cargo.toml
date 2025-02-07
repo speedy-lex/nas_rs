@@ -7,3 +7,4 @@ edition = "2021"
 clap = "4.5.27"
 rkyv = { version = "0.8.10" }
 serde = { version = "1.0.217", features = ["derive"] }
+sodiumoxide = "0.2.7"
