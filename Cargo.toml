@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "4.5.27"
+clap = "4.5.28"
 openssl = { version = "0.10.70", features = ["vendored"] }
 rkyv = { version = "0.8.10" }
 serde = { version = "1.0.217", features = ["derive"] }
