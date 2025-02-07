@@ -1,3 +1,5 @@
+pub mod crypto;
+
 use std::{io::{Read, Write}, net::TcpStream, path::{Path, PathBuf}};
 
 use rkyv::{access, api::high::{HighDeserializer, HighSerializer}, deserialize, rancor, ser::allocator::ArenaHandle, to_bytes, util::AlignedVec, Archive, Deserialize, Portable, Serialize};
