@@ -3,6 +3,7 @@ use std::{io::{Read, Write}, net::{Ipv4Addr, SocketAddrV4, TcpStream}};
 use clap::{arg, value_parser};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream, PORT};
 use rkyv::rancor::Error;
+use sodiumoxide::crypto::aead::{self, Nonce, KEYBYTES, NONCEBYTES};
 
 fn main() {
     let args= clap::Command::new("nas_rs")
@@ -32,15 +33,16 @@ fn main() {
             .value_parser(value_parser!(u16))
         ).get_matches();
     
+    let key= aead::Key::from_slice(&[0; KEYBYTES]).unwrap();
     let path = args.get_one::<String>("file_path").unwrap().clone();
-
+    
     // file data
     let file_data = args.get_one("write")
         .filter(|x| **x)
         .map(|_: &bool| {
             let mut vec = vec![];
             std::io::stdin().read_to_end(&mut vec).expect("can't read");
-            vec
+            sodiumoxide::crypto::aead::seal(&vec, None, &Nonce::from_slice(&[0; NONCEBYTES]).unwrap(), &key)
         }).unwrap_or_default();
     // package data
     let request = args.get_one("delete")
@@ -78,8 +80,9 @@ fn main() {
 
     stream.inner.flush().unwrap();
     if let Request::Read { .. } = request {
-        let file_info = stream.receive_struct::<FileRead, ArchivedFileRead, Error>().expect("couldn't recieve file");
-        let file = stream.receive_buffer::<Error>(file_info.len).expect("couldn't receive file");
+        let file_info = stream.receive_struct::<FileRead, ArchivedFileRead, Error>().expect("couldn't receive file");
+        let encrypted = stream.receive_buffer::<Error>(file_info.len).expect("couldn't receive file");
+        let file= sodiumoxide::crypto::aead::open(&encrypted, None, &Nonce::from_slice(&[0; NONCEBYTES]).unwrap(), &key).unwrap();
         std::io::stdout().write_all(&file).unwrap();
     } else if let Request::EnumDir { .. } = request {
         let files = stream.receive_struct::<DirEnum, ArchivedDirEnum, Error>().expect("couldn't receive dir enum");
