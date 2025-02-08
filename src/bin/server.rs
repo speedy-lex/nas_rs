@@ -18,6 +18,13 @@ fn main() {
             .value_parser(value_parser!(u16))
         ).get_matches();
 
+    if let Err(err) = std::fs::create_dir("./files/") {
+        match err.kind() {
+            std::io::ErrorKind::AlreadyExists => {},
+            _ => panic!("{err}"),
+        }
+    }
+
     let listener = TcpListener::bind(SocketAddrV4::new(*args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST), *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't bind port");
     let mut threads = vec![];
     for msg in listener.incoming() {

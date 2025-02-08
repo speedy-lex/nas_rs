@@ -6,6 +6,7 @@ use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use rkyv::rancor::Error;
 
 fn main() {
+    openssl::init();
     let args= clap::Command::new("nas_rs")
         .arg(
             arg!([file_path])
