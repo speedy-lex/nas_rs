@@ -6,7 +6,9 @@
 
 use std::fs::File;
 use std::io::Write;
+use std::net::Ipv4Addr;
 
+use clap::{arg, value_parser};
 use openssl::asn1::Asn1Time;
 use openssl::bn::{BigNum, MsbOption};
 use openssl::error::ErrorStack;
@@ -82,6 +84,7 @@ fn mk_request(key_pair: &PKey<Private>) -> Result<X509Req, ErrorStack> {
 fn mk_ca_signed_cert(
     ca_cert: &X509Ref,
     ca_key_pair: &PKeyRef<Private>,
+    ip: Ipv4Addr,
 ) -> Result<(X509, PKey<Private>), ErrorStack> {
     let rsa = Rsa::generate(2048)?;
     let key_pair = PKey::from_rsa(rsa)?;
@@ -126,7 +129,7 @@ fn mk_ca_signed_cert(
     cert_builder.append_extension(auth_key_identifier)?;
 
     let subject_alt_name = SubjectAlternativeName::new()
-        // .ip("127.0.0.1")
+        .ip(&ip.to_string())
         .build(&cert_builder.x509v3_context(Some(ca_cert), None))?;
     cert_builder.append_extension(subject_alt_name)?;
 
@@ -137,10 +140,17 @@ fn mk_ca_signed_cert(
 }
 
 fn real_main() -> Result<(), ErrorStack> {
+    let args= clap::Command::new("nas_rs")
+        .arg(
+            arg!(--ip <ip>)
+            .required(false)
+            .value_parser(value_parser!(Ipv4Addr))
+        ).get_matches();
+    
     let (ca_cert, ca_key_pair) = mk_ca_cert()?;
     File::create("CA.cert").unwrap().write_all(&ca_cert.to_pem().unwrap()).unwrap();
     File::create("CA.key").unwrap().write_all(&ca_key_pair.private_key_to_pem_pkcs8().unwrap()).unwrap();
-    let (cert, key_pair) = mk_ca_signed_cert(&ca_cert, &ca_key_pair)?;
+    let (cert, key_pair) = mk_ca_signed_cert(&ca_cert, &ca_key_pair, *args.get_one("ip").unwrap())?;
     File::create("SERVER.cert").unwrap().write_all(&cert.to_pem().unwrap()).unwrap();
     File::create("SERVER.key").unwrap().write_all(&key_pair.private_key_to_pem_pkcs8().unwrap()).unwrap();
 
