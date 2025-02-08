@@ -25,7 +25,7 @@ fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
     let key_pair = PKey::from_rsa(rsa)?;
 
     let mut x509_name = X509NameBuilder::new()?;
-    x509_name.append_entry_by_text("CN", "CA certificate for nas_rs server (https://github.com/speedy-lex/nas_rs)")?;
+    x509_name.append_entry_by_text("CN", "CA certificate for nas_rs server")?;
     let x509_name = x509_name.build();
 
     let mut cert_builder = X509::builder()?;
@@ -69,7 +69,7 @@ fn mk_request(key_pair: &PKey<Private>) -> Result<X509Req, ErrorStack> {
     req_builder.set_pubkey(key_pair)?;
 
     let mut x509_name = X509NameBuilder::new()?;
-    x509_name.append_entry_by_text("CN", "Server certificate for nas_rs server (https://github.com/speedy-lex/nas_rs)")?;
+    x509_name.append_entry_by_text("CN", "Server certificate for nas_rs server")?;
     let x509_name = x509_name.build();
     req_builder.set_subject_name(&x509_name)?;
 
