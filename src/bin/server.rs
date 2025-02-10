@@ -1,8 +1,8 @@
-use std::{fs::File, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, thread};
+use std::{fs::{read, File}, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, sync::Arc, thread};
 
 use clap::{arg, value_parser};
 use nas_rs::{sanitize_path, sanitize_path_enum, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
-use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslVerifyMode};
+use openssl::{ssl::{Ssl, SslContext, SslContextBuilder, SslFiletype, SslMethod, SslVerifyMode, SslVersion}, x509::X509};
 use rkyv::rancor::Error;
 
 fn main() {
@@ -25,10 +25,24 @@ fn main() {
         }
     }
 
-    let listener = TcpListener::bind(SocketAddrV4::new(*args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST), *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't bind port");
+    let ip = *args.get_one("ip").unwrap_or(&Ipv4Addr::LOCALHOST);
+    let server_certificate = X509::from_pem(&read("SERVER.cert").unwrap()).unwrap();
+    server_certificate.subject_alt_names().expect("sign the certificate with an ip or domain").iter();
+    
+    let mut ssl_context = SslContextBuilder::new(SslMethod::tls_server()).unwrap();
+    ssl_context.set_min_proto_version(Some(SslVersion::TLS1_3)).unwrap();
+    ssl_context.set_ciphersuites("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256").unwrap();
+    ssl_context.set_ca_file("CA.cert").unwrap();
+    ssl_context.set_certificate_file("SERVER.cert", SslFiletype::PEM).unwrap();
+    ssl_context.set_private_key_file("SERVER.key", SslFiletype::PEM).unwrap();
+    ssl_context.set_verify(SslVerifyMode::PEER);
+    let ssl_context = Arc::new(ssl_context.build());
+    
     let mut threads = vec![];
+    let listener = TcpListener::bind(SocketAddrV4::new(ip, *args.get_one("port").unwrap_or(&PORT))).expect("Couldn't bind port");
     for msg in listener.incoming() {
-        let thread = thread::spawn(move || handle_connection(msg));
+        let ssl_ref = ssl_context.clone();
+        let thread = thread::spawn(move || handle_connection(msg, ssl_ref));
         threads.push(thread);
         threads = threads.into_iter().filter_map(|x| {
             if !x.is_finished() {
@@ -42,14 +56,9 @@ fn main() {
     }
 }
 
-fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>) {
+fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>, ctx: Arc<SslContext>) {
     let tcp = msg.unwrap();
-    let mut ssl = SslAcceptor::mozilla_modern_v5(SslMethod::tls_server()).unwrap();
-    ssl.set_ca_file("CA.cert").unwrap();
-    ssl.set_certificate_file("SERVER.cert", SslFiletype::PEM).unwrap();
-    ssl.set_private_key_file("SERVER.key", SslFiletype::PEM).unwrap();
-    ssl.set_verify(SslVerifyMode::PEER);
-    let mut ssl = ssl.build().accept(tcp).unwrap();
+    let mut ssl = Ssl::new(&ctx).unwrap().accept(tcp).unwrap();
     let mut stream = StructStream::new(&mut ssl);
 
     // read struct
