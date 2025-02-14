@@ -93,4 +93,6 @@ fn main() {
         let files = stream.receive_struct::<DirEnum, ArchivedDirEnum, Error>().expect("couldn't receive dir enum");
         println!("{files:?}");
     }
+
+    stream.receive_u64::<Error>().unwrap();
 }
