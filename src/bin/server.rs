@@ -1,4 +1,4 @@
-use std::{fs::{read, File}, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, sync::Arc, thread};
+use std::{fs::{read, File}, io::Write, net::{Ipv4Addr, SocketAddrV4, TcpListener}, sync::Arc, thread, time::Duration};
 
 use clap::{arg, value_parser};
 use nas_rs::{sanitize_path, sanitize_path_enum, ArchivedRequest, DirEnum, FileRead, Request, StructStream, PORT};
@@ -58,6 +58,7 @@ fn main() {
 
 fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>, ctx: Arc<SslContext>) {
     let tcp = msg.unwrap();
+    tcp.set_read_timeout(Some(Duration::from_secs(500))).unwrap();
     let mut ssl = Ssl::new(&ctx).unwrap().accept(tcp).unwrap();
     let mut stream = StructStream::new(&mut ssl);
 
@@ -106,4 +107,5 @@ fn handle_connection(msg: Result<std::net::TcpStream, std::io::Error>, ctx: Arc<
             }).expect("couldn't send dir enum");
         },
     }
+    stream.write_u64::<Error>(0).unwrap();
 }
