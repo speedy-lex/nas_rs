@@ -3,8 +3,11 @@ name = "nas_rs"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["gui"]
+
 [dependencies]
-clap = "4.5.28"
+clap = "4.5.31"
 openssl = { version = "0.10.70", features = ["vendored"] }
 rkyv = { version = "0.8.10" }
-serde = { version = "1.0.217", features = ["derive"] }
+serde = { version = "1.0.218", features = ["derive"] }
