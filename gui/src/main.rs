@@ -1,6 +1,6 @@
 use std::{net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::Path, str::FromStr};
 
-use iced::{application, widget::{button, column, container, text, text_input, vertical_space, Column}, Length, Task};
+use iced::{application, widget::{button, column, container, row, text, text_input, vertical_space, Column}, Length, Task};
 use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream};
 use rancor::{Error, Source};
@@ -12,7 +12,6 @@ struct DirEntry {
 }
 
 fn enumerate(address: SocketAddrV4, path: String) -> Result<Vec<DirEntry>, Error> {
-    let is_root = path == ".";
     let request = Request::EnumDir { path };
 
     let tcp = TcpStream::connect(address).expect("Couldn't connect");
@@ -28,11 +27,7 @@ fn enumerate(address: SocketAddrV4, path: String) -> Result<Vec<DirEntry>, Error
     let files = stream.receive_struct::<DirEnum, ArchivedDirEnum, Error>().expect("couldn't receive dir enum");
     stream.receive_u64::<Error>()?;
     let files = files.files.into_iter().map(|(path, is_dir)| DirEntry { name: path, is_dir });
-    if is_root {
-        Ok(files.collect())
-    } else {
-        Ok([DirEntry { is_dir: true, name: "..".to_string() }].into_iter().chain(files).collect())
-    }
+    Ok(files.collect())
 }
 fn download(address: SocketAddrV4, path: String, outpath: &Path) -> Result<(), Error> {
     let request = Request::Read { path };
@@ -53,7 +48,20 @@ fn download(address: SocketAddrV4, path: String, outpath: &Path) -> Result<(), E
     std::fs::write(outpath, buf).map_err(Error::new)?;
     Ok(())
 }
+fn delete(address: SocketAddrV4, path: String) -> Result<(), Error> {
+    let request = Request::Delete { path };
 
+    let tcp = TcpStream::connect(address).expect("Couldn't connect");
+    let mut ssl = SslConnector::builder(SslMethod::tls_client()).map_err(Error::new)?;
+    ssl.set_verify(SslVerifyMode::PEER);
+    ssl.set_ca_file("CA.cert").map_err(Error::new)?;
+    let ssl = ssl.build();
+    let mut stream = ssl.connect(&address.ip().to_string(), tcp).map_err(Error::new)?;
+    let mut stream = StructStream::new(&mut stream);
+
+    stream.write_struct::<Error>(&request)?;
+    Ok(())
+}
 
 #[derive(Debug)]
 enum State {
@@ -81,6 +89,7 @@ enum Message {
     PortInput(u16),
     Connect,
     Open(String),
+    Delete(String),
     Download(String),
 }
 
@@ -138,6 +147,18 @@ fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
                     outpath.push(file_name);
                     download(*socket, absolute_path, &outpath).unwrap();
                 },
+                Message::Delete(file_name)=>{
+                    let absolute_path = if path != "." {
+                        let mut absolute_path = path.clone();
+                        absolute_path.push('/');
+                        absolute_path.push_str(&file_name);
+                        absolute_path
+                    } else {
+                        file_name.clone()
+                    };
+                    delete(*socket, absolute_path).unwrap();
+                    *needs_update = true;
+                },
                 Message::Connect => {},
                 _ => {
                     panic!("invalid message");
@@ -166,14 +187,19 @@ fn view(state: &State) -> iced::Element<Message> {
         },
         State::Open { path, dir, .. } => {
             let elems = dir.iter().map(|x| {
-                if x.is_dir {
-                    button(text(x.name.clone())).on_press(Message::Open(x.name.clone())).into()
+                let item = if x.is_dir {
+                    button(text(x.name.clone())).on_press(Message::Open(x.name.clone()))
                 } else {
-                    button(text(x.name.clone())).on_press(Message::Download(x.name.clone())).into()
-                }
+                    button(text(x.name.clone())).on_press(Message::Download(x.name.clone()))
+                };
+                row!(
+                    item,
+                    button(text("delete")).on_press(Message::Delete(x.name.clone()))
+                ).into()
             });
             column!(
                 text(path),
+                button(text("..")).on_press(Message::Open("..".to_string())),
                 Column::from_iter(elems)
             ).into()
         },
