@@ -51,6 +51,7 @@ fn download(address: SocketAddrV4, path: String, outpath: &Path) -> Result<(), E
     let buf = stream.receive_buffer(file.len)?;
     stream.receive_u64::<Error>()?;
     std::fs::write(outpath, buf).map_err(Error::new)?;
+    open::that(outpath.parent().unwrap()).map_err(Error::new)?;
     Ok(())
 }
 
