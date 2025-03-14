@@ -233,6 +233,15 @@ fn open_file() -> Option<PathBuf> {
 }
 
 fn main() {
+    let mut download_path = std::env::current_dir().unwrap();
+    download_path.push("downloads");
+    if let Err(x) = std::fs::create_dir(download_path) {
+        match x.kind() {
+            std::io::ErrorKind::AlreadyExists => {}, // we don't care if the dir exists
+            _ => panic!("{}", x),
+        }
+    }
+    
     let app = application::<State, Message, _, _>("nas_rs client", update, view);
     app.run().unwrap();
 }
