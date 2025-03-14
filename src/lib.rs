@@ -57,11 +57,11 @@ pub fn sanitize_path_enum(path: &str) -> Option<PathBuf> {
     sanitize_path(path)
 }
 
-pub struct StructStream<'a, S: Read + Write> {
-    pub inner: &'a mut S
+pub struct StructStream<S: Read + Write> {
+    pub inner: S
 }
-impl<'a, S: Read + Write> StructStream<'a, S> {
-    pub fn new(stream: &'a mut S) -> Self {
+impl<S: Read + Write> StructStream<S> {
+    pub fn new(stream: S) -> Self {
         Self { inner: stream }
     }
     pub fn write_u64<E: rancor::Source>(&mut self, x: u64) -> Result<(), E> {

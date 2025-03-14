@@ -9,3 +9,4 @@ iced = "0.13.1"
 openssl = { version = "0.10.70", features = ["vendored"] }
 rancor = "0.1.0"
 open = "5.3.2"
+rfd = "0.15.3"
