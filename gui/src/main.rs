@@ -1,6 +1,7 @@
 use std::{net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::{Path, PathBuf}, str::FromStr};
 
 use iced::{application, widget::{button, column, container, row, text, text_input, vertical_space, Column}, Length, Task};
+use iced_aw::number_input;
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream};
 use rancor::{Error, Source};
@@ -199,7 +200,7 @@ fn view(state: &State) -> iced::Element<Message> {
                 column!(
                     text_input(if *bad_ip {"Invalid Ip"} else {"Ipv4 address"}, ip).on_input(Message::IpInput),
                     vertical_space().height(Length::Fixed(5.0)),
-                    text_input("Port", &port.to_string()).on_input(|x| {Message::PortInput(if x.is_empty() {0} else {x.parse().unwrap_or(*port)})}),
+                    number_input(port, 0..=u16::MAX, Message::PortInput).ignore_buttons(true).width(Length::Fill),
                     vertical_space().height(Length::Fixed(5.0)),
                     button(text("Connect")).on_press(Message::Connect).width(Length::Fill)
                 ).max_width(250).height(Length::Shrink)

@@ -10,3 +10,4 @@ openssl = { version = "0.10.70", features = ["vendored"] }
 rancor = "0.1.0"
 open = "5.3.2"
 rfd = "0.15.3"
+iced_aw = { version = "0.12.2", features = ["number_input"] }
