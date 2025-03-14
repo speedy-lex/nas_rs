@@ -1,7 +1,7 @@
-use std::{net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::Path, str::FromStr};
+use std::{net::{Ipv4Addr, SocketAddrV4, TcpStream}, path::{Path, PathBuf}, str::FromStr};
 
 use iced::{application, widget::{button, column, container, row, text, text_input, vertical_space, Column}, Length, Task};
-use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 use nas_rs::{ArchivedDirEnum, ArchivedFileRead, DirEnum, FileRead, Request, StructStream};
 use rancor::{Error, Source};
 
@@ -11,16 +11,19 @@ struct DirEntry {
     is_dir: bool,
 }
 
-fn enumerate(address: SocketAddrV4, path: String) -> Result<Vec<DirEntry>, Error> {
-    let request = Request::EnumDir { path };
-
-    let tcp = TcpStream::connect(address).expect("Couldn't connect");
+fn get_stream(address: SocketAddrV4) -> Result<StructStream<SslStream<TcpStream>>, Error> {
+    let tcp = TcpStream::connect(address).map_err(Error::new)?;
     let mut ssl = SslConnector::builder(SslMethod::tls_client()).map_err(Error::new)?;
     ssl.set_verify(SslVerifyMode::PEER);
     ssl.set_ca_file("CA.cert").map_err(Error::new)?;
     let ssl = ssl.build();
-    let mut stream = ssl.connect(&address.ip().to_string(), tcp).map_err(Error::new)?;
-    let mut stream = StructStream::new(&mut stream);
+    let stream = ssl.connect(&address.ip().to_string(), tcp).map_err(Error::new)?;
+    Ok(StructStream::new(stream))
+}
+
+fn enumerate(address: SocketAddrV4, path: String) -> Result<Vec<DirEntry>, Error> {
+    let request = Request::EnumDir { path };
+    let mut stream = get_stream(address)?;
 
     stream.write_struct::<Error>(&request)?;
 
@@ -31,14 +34,7 @@ fn enumerate(address: SocketAddrV4, path: String) -> Result<Vec<DirEntry>, Error
 }
 fn download(address: SocketAddrV4, path: String, outpath: &Path) -> Result<(), Error> {
     let request = Request::Read { path };
-
-    let tcp = TcpStream::connect(address).expect("Couldn't connect");
-    let mut ssl = SslConnector::builder(SslMethod::tls_client()).map_err(Error::new)?;
-    ssl.set_verify(SslVerifyMode::PEER);
-    ssl.set_ca_file("CA.cert").map_err(Error::new)?;
-    let ssl = ssl.build();
-    let mut stream = ssl.connect(&address.ip().to_string(), tcp).map_err(Error::new)?;
-    let mut stream = StructStream::new(&mut stream);
+    let mut stream = get_stream(address)?;
 
     stream.write_struct::<Error>(&request)?;
 
@@ -49,16 +45,20 @@ fn download(address: SocketAddrV4, path: String, outpath: &Path) -> Result<(), E
     open::that(outpath.parent().unwrap()).map_err(Error::new)?;
     Ok(())
 }
+fn upload(address: SocketAddrV4, path: String, inpath: &Path) -> Result<(), Error> {
+    let buf = std::fs::read(inpath).map_err(Error::new)?;
+    let request = Request::Write { path, len: buf.len() as u64 };
+    let mut stream = get_stream(address)?;
+
+    stream.write_struct::<Error>(&request)?;
+    stream.write_buffer(&buf)?;
+
+    stream.receive_u64::<Error>()?;
+    Ok(())
+}
 fn delete(address: SocketAddrV4, path: String) -> Result<(), Error> {
     let request = Request::Delete { path };
-
-    let tcp = TcpStream::connect(address).expect("Couldn't connect");
-    let mut ssl = SslConnector::builder(SslMethod::tls_client()).map_err(Error::new)?;
-    ssl.set_verify(SslVerifyMode::PEER);
-    ssl.set_ca_file("CA.cert").map_err(Error::new)?;
-    let ssl = ssl.build();
-    let mut stream = ssl.connect(&address.ip().to_string(), tcp).map_err(Error::new)?;
-    let mut stream = StructStream::new(&mut stream);
+    let mut stream = get_stream(address)?;
 
     stream.write_struct::<Error>(&request)?;
     Ok(())
@@ -92,6 +92,7 @@ enum Message {
     Open(String),
     Delete(String),
     Download(String),
+    Upload,
 }
 
 fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
@@ -148,6 +149,24 @@ fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
                     outpath.push(file_name);
                     download(*socket, absolute_path, &outpath).unwrap();
                 },
+                Message::Upload => {
+                    let file_path = if let Some(file_path) = open_file() {
+                        file_path
+                    } else {
+                        return Task::none();
+                    };
+
+                    let absolute_path = if path != "." {
+                        let mut absolute_path = path.clone();
+                        absolute_path.push('/');
+                        absolute_path.push_str(file_path.file_name().unwrap().try_into().unwrap());
+                        absolute_path
+                    } else {
+                        TryInto::<&str>::try_into(file_path.file_name().unwrap()).unwrap().to_owned()
+                    };
+                    upload(*socket, absolute_path, &file_path).unwrap();
+                    *needs_update = true;
+                }
                 Message::Delete(file_name)=>{
                     let absolute_path = if path != "." {
                         let mut absolute_path = path.clone();
@@ -200,6 +219,7 @@ fn view(state: &State) -> iced::Element<Message> {
             });
             column!(
                 text(path),
+                button(text("upload")).on_press_with(|| {Message::Upload}),
                 button(text("..")).on_press(Message::Open("..".to_string())),
                 Column::from_iter(elems)
             ).into()
@@ -207,7 +227,11 @@ fn view(state: &State) -> iced::Element<Message> {
     }
 }
 
+fn open_file() -> Option<PathBuf> {
+    rfd::FileDialog::new().set_title("Upload a file").pick_file()
+}
+
 fn main() {
-    let app = application::<State, Message, _, _>("hello", update, view);
+    let app = application::<State, Message, _, _>("nas_rs client", update, view);
     app.run().unwrap();
 }
