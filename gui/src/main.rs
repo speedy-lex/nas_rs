@@ -64,6 +64,13 @@ fn delete(address: SocketAddrV4, path: String) -> Result<(), Error> {
     stream.write_struct::<Error>(&request)?;
     Ok(())
 }
+fn mkdir(address: SocketAddrV4, path: String) -> Result<(), Error> {
+    let request = Request::MkDir { path };
+    let mut stream = get_stream(address)?;
+
+    stream.write_struct::<Error>(&request)?;
+    Ok(())
+}
 
 #[derive(Debug)]
 enum State {
@@ -77,6 +84,7 @@ enum State {
         path: String,
         needs_update: bool,
         dir: Vec<DirEntry>,
+        mkdir_text: String,
     },
 }
 impl Default for State {
@@ -94,6 +102,8 @@ enum Message {
     Delete(String),
     Download(String),
     Upload,
+    MkdirType(String),
+    Mkdir,
 }
 
 fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
@@ -113,13 +123,13 @@ fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
                         return Task::none();
                     }
                     let ip = ip.unwrap();
-                    *state = State::Open { socket: SocketAddrV4::new(ip, *port), path: '.'.to_string(), needs_update: true, dir: vec![] };
+                    *state = State::Open { socket: SocketAddrV4::new(ip, *port), path: '.'.to_string(), needs_update: true, dir: vec![], mkdir_text: String::new() };
                     return update(state, msg);
                 },
                 _ => panic!("invalid message")
             }
         },
-        State::Open { path, socket, needs_update, dir } => {
+        State::Open { path, socket, needs_update, dir, mkdir_text } => {
             match msg {
                 Message::Open(open) => {
                     if open == ".." {
@@ -168,7 +178,7 @@ fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
                     upload(*socket, absolute_path, &file_path).unwrap();
                     *needs_update = true;
                 }
-                Message::Delete(file_name)=>{
+                Message::Delete(file_name) => {
                     let absolute_path = if path != "." {
                         let mut absolute_path = path.clone();
                         absolute_path.push('/');
@@ -177,8 +187,25 @@ fn update(state: &mut State, msg: Message) -> iced::Task<Message> {
                     } else {
                         file_name.clone()
                     };
+                    println!("{absolute_path}");
                     delete(*socket, absolute_path).unwrap();
                     *needs_update = true;
+                },
+                Message::Mkdir => {
+                    let absolute_path = if path != "." {
+                        let mut absolute_path = path.clone();
+                        absolute_path.push('/');
+                        absolute_path.push_str(mkdir_text);
+                        absolute_path
+                    } else {
+                        mkdir_text.clone()
+                    };
+                    println!("{absolute_path}");
+                    mkdir(*socket, absolute_path).unwrap();
+                    *needs_update = true;
+                }
+                Message::MkdirType(new) => {
+                    *mkdir_text = new;
                 },
                 Message::Connect => {},
                 _ => {
@@ -206,10 +233,10 @@ fn view(state: &State) -> iced::Element<Message> {
                 ).max_width(250).height(Length::Shrink)
             ).center(Length::Fill).into()
         },
-        State::Open { path, dir, .. } => {
+        State::Open { path, dir, mkdir_text, .. } => {
             let elems = dir.iter().map(|x| {
                 let item = if x.is_dir {
-                    button(text(x.name.clone())).on_press(Message::Open(x.name.clone()))
+                    button(text(x.name.clone())).on_press(Message::Open(x.name.clone()))    
                 } else {
                     button(text(x.name.clone())).on_press(Message::Download(x.name.clone()))
                 };
@@ -220,7 +247,10 @@ fn view(state: &State) -> iced::Element<Message> {
             });
             column!(
                 text(path),
-                button(text("upload")).on_press_with(|| {Message::Upload}),
+                row!(
+                    button(text("upload")).on_press_with(|| {Message::Upload}),
+                    text_input("New Folder Name", mkdir_text).on_input(Message::MkdirType).on_submit(Message::Mkdir),
+                ),
                 button(text("..")).on_press(Message::Open("..".to_string())),
                 Column::from_iter(elems)
             ).into()
